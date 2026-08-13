@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Invisel · Payment Ledger</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root{
@@ -233,11 +234,11 @@ async function storageSet(key, value){
   }catch(e){ state.storageOK = false; }
 }
 
-async function saveVendors(){ await storageSet(KEYS.vendors, state.vendors); }
-async function saveInvoices(){ await storageSet(KEYS.invoices, state.invoices); }
-async function saveCashlog(){ await storageSet(KEYS.cashlog, state.cashlog); }
-async function saveAccounts(){ await storageSet(KEYS.accounts, state.accounts); }
-async function saveRepayments(){ await storageSet(KEYS.repayments, state.repayments); }
+async function saveVendors(){ await storageSet(KEYS.vendors, state.vendors); saveLocalCache(); }
+async function saveInvoices(){ await storageSet(KEYS.invoices, state.invoices); saveLocalCache(); }
+async function saveCashlog(){ await storageSet(KEYS.cashlog, state.cashlog); saveLocalCache(); }
+async function saveAccounts(){ await storageSet(KEYS.accounts, state.accounts); saveLocalCache(); }
+async function saveRepayments(){ await storageSet(KEYS.repayments, state.repayments); saveLocalCache(); }
 
 
 /* ---------------- Date / money helpers ---------------- */
@@ -332,9 +333,70 @@ function openModal(html){
 }
 function closeModal(){ document.getElementById('modalRoot').innerHTML=''; }
 
-/* ---------------- Init ---------------- */
+/* ---------------- Init (local cache-first, background sync) ---------------- */
+const CACHE_KEY = 'invisel_cache_v1';
+function saveLocalCache(){
+  try{
+    localStorage.setItem(CACHE_KEY, JSON.stringify({
+      vendors: state.vendors, invoices: state.invoices, cashlog: state.cashlog,
+      accounts: state.accounts, repayments: state.repayments, cachedAt: Date.now()
+    }));
+  }catch(e){}
+}
+function loadLocalCache(){
+  try{ const raw = localStorage.getItem(CACHE_KEY); return raw ? JSON.parse(raw) : null; }catch(e){ return null; }
+}
+
+async function applyLoadedData(common){
+  const vendors = common.vendors;
+  state.vendors = (vendors && vendors.length) ? vendors : JSON.parse(JSON.stringify(DEFAULT_VENDORS));
+  if(!vendors || !vendors.length) await saveVendors();
+  state.invoices = common.invoices || [];
+  state.accounts = common.accounts || [];
+  state.repayments = common.repayments || [];
+
+  // Migrate old single-balance cash log ({date: amount}) into a per-account shape ({accountId: {date: amount}})
+  let cl = common.cashlog || {};
+  const vals = Object.values(cl);
+  const isOldFlatFormat = vals.length>0 && typeof vals[0] === 'number';
+  if(isOldFlatFormat){
+    let primary = state.accounts.find(a=>a.type==='bank');
+    if(!primary){
+      primary = { id: uid('acc_'), name:'Primary Account', type:'bank', purpose:'Auto-created during upgrade — rename or replace as needed.', createdAt: Date.now() };
+      state.accounts.push(primary);
+      await saveAccounts();
+    }
+    cl = { [primary.id]: cl };
+    await storageSet(KEYS.cashlog, cl);
+  }
+  state.cashlog = cl;
+}
+
+function backendResultToCommon(all){
+  return { vendors: all[KEYS.vendors], invoices: all[KEYS.invoices], cashlog: all[KEYS.cashlog], accounts: all[KEYS.accounts], repayments: all[KEYS.repayments] };
+}
+
 async function init(){
+  const cached = loadLocalCache();
+  if(cached){
+    // Fast path: paint instantly from what's on this device, then quietly refresh from the Sheet.
+    await applyLoadedData(cached);
+    document.getElementById('loading').style.display='none';
+    document.getElementById('app').style.display='block';
+    render();
+    refreshFromBackend();
+    return;
+  }
+  // First-ever load on this device/browser: nothing to show yet, so wait for the Sheet.
   await loadAppData();
+}
+
+async function refreshFromBackend(){
+  const result = await fetchAllFromBackend();
+  if(result.status !== 'ok'){ render(); return; } // storageOK is already false; banner will reflect it
+  await applyLoadedData(backendResultToCommon(result.data));
+  saveLocalCache();
+  render();
 }
 
 async function loadAppData(){
@@ -350,38 +412,13 @@ async function loadAppData(){
     return;
   }
 
-  const all = result.status === 'ok' ? result.data : null;
-  const vendors = all ? all[KEYS.vendors] : null;
-  const invoices = all ? all[KEYS.invoices] : [];
-  const cashlog = all ? all[KEYS.cashlog] : {};
-  const accounts = all ? all[KEYS.accounts] : [];
-  const repayments = all ? all[KEYS.repayments] : [];
-
-  state.vendors = vendors && vendors.length ? vendors : JSON.parse(JSON.stringify(DEFAULT_VENDORS));
-  if(!vendors || !vendors.length) await saveVendors();
-  state.invoices = invoices || [];
-  state.accounts = accounts || [];
-  state.repayments = repayments || [];
-
-  // Migrate old single-balance cash log ({date: amount}) into a per-account shape ({accountId: {date: amount}})
-  let cl = cashlog || {};
-  const vals = Object.values(cl);
-  const isOldFlatFormat = vals.length>0 && typeof vals[0] === 'number';
-  if(isOldFlatFormat){
-    let primary = state.accounts.find(a=>a.type==='bank');
-    if(!primary){
-      primary = { id: uid('acc_'), name:'Primary Account', type:'bank', purpose:'Auto-created during upgrade — rename or replace as needed.', createdAt: Date.now() };
-      state.accounts.push(primary);
-      await saveAccounts();
-    }
-    cl = { [primary.id]: cl };
-    await storageSet(KEYS.cashlog, cl);
-  }
-  state.cashlog = cl;
+  const common = result.status === 'ok' ? backendResultToCommon(result.data) : {};
+  await applyLoadedData(common);
 
   document.getElementById('loading').style.display='none';
   document.getElementById('app').style.display='block';
   render();
+  saveLocalCache();
 }
 
 /* ---------------- Nav / routing ---------------- */
@@ -441,6 +478,14 @@ function approvalStamp(inv){
   if(inv.approvalStatus==='approved') return `<span class="stamp green">Approved</span>`;
   if(inv.approvalStatus==='sent_for_approval') return `<span class="stamp amber">Sent for Approval</span>`;
   return `<span class="stamp grey">Not Sent</span>`;
+}
+function subtitleFor(i){
+  const bits = [
+    i.invoiceNumber ? 'Inv #'+i.invoiceNumber : null,
+    i.isAdhoc ? 'Ad-hoc' : null,
+    accountLabel(i.accountId) || null
+  ].filter(Boolean);
+  return bits.join(' · ');
 }
 
 /* ================= DASHBOARD ================= */
@@ -526,7 +571,7 @@ function renderDashboard(){
       <tbody>
         ${recentInvoices.length? recentInvoices.map(i=>`
           <tr>
-            <td><div class="vendorname">${i.vendorName}</div></td>
+            <td><div class="vendorname">${i.vendorName}</div>${subtitleFor(i)?`<div class="vendorcat">${subtitleFor(i)}</div>`:''}</td>
             <td class="muted">${i.category}</td>
             <td class="amt">${fmtMoney(i.netPayable)}</td>
             <td class="mono">${fmtDate(i.dueDate)}</td>
@@ -562,6 +607,11 @@ function renderNewEntry(){
       <div class="field">
         <label>Category</label>
         <input type="text" id="f_category" placeholder="e.g. Marketing, Raw Material, Admin & General Expenses">
+      </div>
+
+      <div class="field">
+        <label>Invoice number (optional)</label>
+        <input type="text" id="f_invnum" placeholder="e.g. INV-2026-0142">
       </div>
 
       <div class="row2">
@@ -696,6 +746,7 @@ async function submitInvoice(e){
     id: uid('inv_'),
     vendorId: isAdhoc? null : vendor.id,
     vendorName, category, isAdhoc,
+    invoiceNumber: document.getElementById('f_invnum').value.trim(),
     invoiceDate, invoiceAmount: amount,
     tdsApplicable: tdsOn, tdsRate: rate, tdsAmount, netPayable,
     dueDate,
@@ -717,7 +768,10 @@ function renderPayments(){
   const f = state.filters.payments;
   const categories = Array.from(new Set(state.invoices.map(i=>i.category))).sort();
   let rows = state.invoices.slice();
-  if(f.q) rows = rows.filter(i=> i.vendorName.toLowerCase().includes(f.q.toLowerCase()));
+  if(f.q){
+    const q = f.q.toLowerCase();
+    rows = rows.filter(i=> i.vendorName.toLowerCase().includes(q) || (i.invoiceNumber && i.invoiceNumber.toLowerCase().includes(q)));
+  }
   if(f.category!=='all') rows = rows.filter(i=>i.category===f.category);
   if(f.approval!=='all') rows = rows.filter(i=>i.approvalStatus===f.approval);
   if(f.payment!=='all') rows = rows.filter(i=>i.payment==='__never' ? true : i.paymentStatus===f.payment);
@@ -728,7 +782,7 @@ function renderPayments(){
   <div class="pagehead"><h1>All Payments</h1><button class="btn primary" onclick="setTab('newentry')">+ New invoice</button></div>
 
   <div class="filters">
-    <input type="text" placeholder="Search vendor…" value="${f.q}" oninput="state.filters.payments.q=this.value; render();">
+    <input type="text" placeholder="Search vendor or invoice #…" value="${f.q}" oninput="state.filters.payments.q=this.value; render();">
     <select onchange="state.filters.payments.category=this.value; render();">
       <option value="all" ${f.category==='all'?'selected':''}>All categories</option>
       ${categories.map(c=>`<option value="${c}" ${f.category===c?'selected':''}>${c}</option>`).join('')}
@@ -761,7 +815,7 @@ function renderPayments(){
     <tbody>
       ${rows.length? rows.map(i=>`
         <tr>
-          <td><div class="vendorname">${i.vendorName}</div>${(i.isAdhoc||i.accountId)?`<div class="vendorcat">${[i.isAdhoc?'Ad-hoc':null, accountLabel(i.accountId)||null].filter(Boolean).join(' · ')}</div>`:''}</td>
+          <td><div class="vendorname">${i.vendorName}</div>${subtitleFor(i)?`<div class="vendorcat">${subtitleFor(i)}</div>`:''}</td>
           <td class="muted">${i.category}</td>
           <td class="amt">${fmtMoney(i.invoiceAmount)}</td>
           <td class="amt">${i.tdsApplicable? fmtMoney(i.tdsAmount)+' ('+i.tdsRate+'%)' : '—'}</td>
@@ -876,7 +930,7 @@ function approvalTable(rows, showSentDate){
     <tbody>
     ${rows.map(i=>`
       <tr>
-        <td class="vendorname">${i.vendorName}</td>
+        <td><div class="vendorname">${i.vendorName}</div>${subtitleFor(i)?`<div class="vendorcat">${subtitleFor(i)}</div>`:''}</td>
         <td class="muted">${i.category}</td>
         <td class="amt">${fmtMoney(i.netPayable)}</td>
         <td class="mono">${fmtDate(i.dueDate)}</td>
@@ -937,7 +991,7 @@ function renderCalendar(){
       <thead><tr><th>Vendor</th><th>Category</th><th class="amt">Net Payable</th><th>Cycle</th><th>Approval</th><th>Payment</th><th></th></tr></thead>
       <tbody>${dueList.map(i=>{ const v=vendorById(i.vendorId); return `
         <tr>
-          <td class="vendorname">${i.vendorName}${!i.accountId?' <span class="stamp grey" style="margin-left:4px;">Unassigned</span>':''}</td>
+          <td><div class="vendorname">${i.vendorName}${!i.accountId?' <span class="stamp grey" style="margin-left:4px;">Unassigned</span>':''}</div>${i.invoiceNumber?`<div class="vendorcat">Inv #${i.invoiceNumber}</div>`:''}</td>
           <td class="muted">${i.category}</td>
           <td class="amt">${fmtMoney(i.netPayable)}</td>
           <td class="cyclebadge">${v? cycleLabel(v):'Ad-hoc'}</td>
@@ -1183,7 +1237,7 @@ function renderHistory(){
     <tbody>
       ${paid.length? paid.map(i=>`
         <tr>
-          <td class="vendorname">${i.vendorName}</td>
+          <td><div class="vendorname">${i.vendorName}</div>${subtitleFor(i)?`<div class="vendorcat">${subtitleFor(i)}</div>`:''}</td>
           <td class="muted">${i.category}</td>
           <td class="amt">${fmtMoney(i.netPayable)}</td>
           <td class="amt">${i.tdsApplicable? fmtMoney(i.tdsAmount):'—'}</td>
