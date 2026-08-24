@@ -1,0 +1,1371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Invisel · Payment Ledger</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#EEF1E9;
+    --surface:#FFFFFF;
+    --surface-2:#F5F7F0;
+    --ink:#1B2420;
+    --ink-soft:#5B655D;
+    --line:#DBDFD0;
+    --accent:#1F5D52;
+    --accent-soft:#E2EEE9;
+    --red:#AF4130;
+    --red-soft:#F6E4DE;
+    --amber:#B07F26;
+    --amber-soft:#F6EDD8;
+    --green:#2F6B4F;
+    --green-soft:#E2EFE7;
+    --grey:#8A8578;
+    --grey-soft:#ECEBE3;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:'Inter',sans-serif;-webkit-font-smoothing:antialiased;}
+  h1,h2,h3,.display{font-family:'Fraunces',serif;}
+  .mono{font-family:'IBM Plex Mono',monospace;}
+  a{color:inherit;}
+  button{font-family:inherit;cursor:pointer;}
+  input,select,textarea{font-family:inherit;}
+
+  #loading{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;background:var(--bg);z-index:999;}
+  #loading .spin{width:34px;height:34px;border:3px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  #loading p{color:var(--ink-soft);font-size:14px;letter-spacing:.02em;}
+
+  #app{display:none;min-height:100vh;}
+  .shell{display:grid;grid-template-columns:220px 1fr;min-height:100vh;}
+  @media (max-width:820px){.shell{grid-template-columns:1fr;}}
+
+  .sidebar{background:var(--ink);color:#EDEFE7;padding:22px 16px;display:flex;flex-direction:column;gap:18px;}
+  @media (max-width:820px){.sidebar{position:sticky;top:0;z-index:50;flex-direction:row;align-items:center;overflow-x:auto;padding:12px 14px;gap:10px;}}
+  .brand{padding:0 6px 10px 6px;border-bottom:1px solid rgba(237,239,231,0.15);}
+  @media (max-width:820px){.brand{border-bottom:none;padding:0;margin-right:6px;}}
+  .brand .mark{font-family:'Fraunces',serif;font-weight:700;font-size:19px;letter-spacing:.01em;}
+  .brand .sub{font-size:10.5px;color:#B9C0B2;letter-spacing:.12em;text-transform:uppercase;margin-top:2px;}
+  @media (max-width:820px){.brand .sub{display:none;}}
+
+  nav.tabs{display:flex;flex-direction:column;gap:2px;}
+  @media (max-width:820px){nav.tabs{flex-direction:row;}}
+  nav.tabs button{background:none;border:none;color:#C7CCC0;text-align:left;padding:9px 10px;border-radius:6px;font-size:13.5px;font-weight:500;display:flex;align-items:center;gap:9px;white-space:nowrap;}
+  nav.tabs button:hover{background:rgba(237,239,231,0.08);color:#fff;}
+  nav.tabs button.active{background:rgba(237,239,231,0.13);color:#fff;}
+  nav.tabs button .dot{width:5px;height:5px;border-radius:50%;background:currentColor;opacity:.5;}
+
+  .side-foot{margin-top:auto;padding:10px 8px 0 8px;border-top:1px solid rgba(237,239,231,0.15);font-size:11px;color:#9AA294;}
+  @media (max-width:820px){.side-foot{display:none;}}
+
+  main{padding:26px 30px 60px 30px;max-width:1180px;}
+  main.fade-in{animation:fadein .18s ease;}
+  @keyframes fadein{from{opacity:.5;transform:translateY(2px);}to{opacity:1;transform:none;}}
+  .btn{transition:background-color .12s ease,border-color .12s ease,transform .05s ease;}
+  .btn:active{transform:scale(0.97);}
+  @media (max-width:820px){main{padding:18px 16px 50px 16px;}}
+
+  .pagehead{display:flex;align-items:baseline;justify-content:space-between;gap:16px;margin-bottom:20px;flex-wrap:wrap;}
+  .pagehead h1{font-size:24px;font-weight:600;margin:0;}
+  .pagehead .today{font-size:12.5px;color:var(--ink-soft);}
+
+  .grid{display:grid;gap:14px;}
+  .cards4{grid-template-columns:repeat(4,1fr);}
+  @media (max-width:980px){.cards4{grid-template-columns:repeat(2,1fr);}}
+  @media (max-width:560px){.cards4{grid-template-columns:1fr;}}
+
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px 17px;}
+  .card .label{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-soft);margin-bottom:8px;}
+  .card .value{font-family:'IBM Plex Mono',monospace;font-size:22px;font-weight:600;}
+  .card .sub{font-size:12px;color:var(--ink-soft);margin-top:5px;}
+  .card.warn{border-color:#E3C79A;background:var(--amber-soft);}
+  .card.bad{border-color:#E0B6A8;background:var(--red-soft);}
+  .card.good{border-color:#B9D6C4;background:var(--green-soft);}
+
+  .section{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px 18px 8px 18px;margin-top:18px;}
+  .section-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:10px;}
+  .section-head h2{font-size:16px;margin:0;font-weight:600;}
+
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-soft);padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap;}
+  td{padding:10px;border-bottom:1px solid var(--line);vertical-align:middle;}
+  tr:last-child td{border-bottom:none;}
+  td.amt,th.amt{font-family:'IBM Plex Mono',monospace;text-align:right;}
+  .tablewrap{overflow-x:auto;}
+  .muted{color:var(--ink-soft);}
+  .empty{padding:26px 10px;text-align:center;color:var(--ink-soft);font-size:13px;}
+
+  .stamp{display:inline-block;font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;padding:3px 8px;border-radius:4px;border:1.5px solid currentColor;white-space:nowrap;}
+  .stamp.grey{color:var(--grey);background:var(--grey-soft);}
+  .stamp.amber{color:var(--amber);background:var(--amber-soft);}
+  .stamp.green{color:var(--green);background:var(--green-soft);}
+  .stamp.red{color:var(--red);background:var(--red-soft);}
+  .stamp.accent{color:var(--accent);background:var(--accent-soft);}
+
+  .btn{display:inline-flex;align-items:center;gap:6px;padding:8px 13px;border-radius:7px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font-size:13px;font-weight:500;}
+  .btn:hover{border-color:var(--accent);}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;}
+  .btn.primary:hover{opacity:.92;}
+  .btn.ghost{border-color:transparent;background:none;padding:6px 8px;}
+  .btn.small{padding:5px 9px;font-size:11.5px;border-radius:6px;}
+  .btn.danger{color:var(--red);}
+  .btn:disabled{opacity:.4;cursor:not-allowed;}
+
+  .field{display:flex;flex-direction:column;gap:5px;margin-bottom:13px;}
+  .field label{font-size:12px;font-weight:600;color:var(--ink-soft);}
+  .field input,.field select,.field textarea{padding:9px 10px;border:1px solid var(--line);border-radius:7px;font-size:13.5px;background:var(--surface-2);color:var(--ink);}
+  .field input:focus,.field select:focus,.field textarea:focus{outline:2px solid var(--accent);outline-offset:1px;background:#fff;}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;}
+  @media (max-width:700px){.row2,.row3{grid-template-columns:1fr;}}
+  .hint{font-size:11.5px;color:var(--ink-soft);margin-top:-3px;}
+  .formcard{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:22px;max-width:640px;}
+  .divider{border:none;border-top:1px solid var(--line);margin:16px 0;}
+
+  .filters{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;}
+  .filters select,.filters input{padding:7px 9px;border:1px solid var(--line);border-radius:7px;font-size:12.5px;background:var(--surface-2);}
+
+  .modal-back{position:fixed;inset:0;background:rgba(27,36,32,0.45);display:flex;align-items:center;justify-content:center;z-index:200;padding:16px;}
+  .modal{background:#fff;border-radius:12px;padding:22px;width:100%;max-width:420px;}
+  .modal h3{margin:0 0 4px 0;font-size:17px;}
+  .modal .modal-sub{font-size:12.5px;color:var(--ink-soft);margin-bottom:16px;}
+  .modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:6px;}
+
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 18px;border-radius:8px;font-size:13px;z-index:300;opacity:0;transition:opacity .25s;pointer-events:none;}
+  .toast.show{opacity:1;}
+
+  .banner{background:var(--red-soft);border:1px solid #E0B6A8;color:var(--red);padding:10px 14px;border-radius:8px;font-size:12.5px;margin-bottom:16px;}
+
+  .vendorname{font-weight:600;}
+  .vendorcat{font-size:11.5px;color:var(--ink-soft);}
+  .cyclebadge{font-size:11px;color:var(--ink-soft);font-family:'IBM Plex Mono',monospace;}
+
+  .approve-flow{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+  .approve-flow .arrow{color:var(--line);font-size:11px;}
+
+  .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:var(--ink-soft);margin-top:10px;}
+  .legend span{display:inline-flex;align-items:center;gap:5px;}
+  .legend i{width:8px;height:8px;border-radius:2px;display:inline-block;}
+</style>
+</head>
+<body>
+
+<div id="loading"><div class="spin"></div><p>Loading your ledger…</p></div>
+
+<div id="app">
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="mark">Invisel</div>
+        <div class="sub">Payment Ledger</div>
+      </div>
+      <nav class="tabs" id="navtabs"></nav>
+      <div class="side-foot" id="sidefoot">Saved automatically to your account.</div>
+    </aside>
+    <main id="main"></main>
+  </div>
+</div>
+
+<div id="modalRoot"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ---------------- Data model & storage ---------------- */
+const KEYS = { vendors:'invisel_vendors', invoices:'invisel_invoices', cashlog:'invisel_cashlog', accounts:'invisel_accounts', repayments:'invisel_repayments' };
+
+const DEFAULT_VENDORS = [
+ {id:'v1', name:'Meta', category:'Marketing', cycleType:'advance100', cycleDays:null, fixedDay:null, nextMonth:false},
+ {id:'v2', name:'Rent', category:'Admin & General Expenses', cycleType:'fixedDate', fixedDay:1, nextMonth:false},
+ {id:'v3', name:'Employees', category:'Admin & General Expenses', cycleType:'fixedDate', fixedDay:7, nextMonth:false},
+ {id:'v4', name:'GST', category:'Admin & General Expenses', cycleType:'fixedDate', fixedDay:20, nextMonth:true},
+ {id:'v5', name:'Gleaser Industries', category:'Finished Goods', cycleType:'days', cycleDays:30},
+ {id:'v6', name:'Winone', category:'Liquid', cycleType:'days', cycleDays:30},
+ {id:'v7', name:'Wani Traders', category:'Microfibers', cycleType:'days', cycleDays:30},
+ {id:'v8', name:'Ugar Lables', category:'Lables', cycleType:'advance50'},
+ {id:'v9', name:'KSN Enterprises', category:'Bopp Tape', cycleType:'advance100'},
+ {id:'v10', name:'Harshad Packwell', category:'Boxes', cycleType:'advance50'},
+ {id:'v11', name:'CM Square', category:'Empty Plastic Bottles', cycleType:'advance100'},
+ {id:'v12', name:'Shweta Enterprises', category:'Thermal Stickers', cycleType:'advance100'},
+ {id:'v13', name:'Rutu Biosis', category:'MSC (Bio Degreaser)', cycleType:'advance50'},
+ {id:'v14', name:'Ekadant', category:'HWSR, FSR', cycleType:'days', cycleDays:15},
+ {id:'v15', name:'Alpha', category:'Raw Material', cycleType:'days', cycleDays:60},
+ {id:'v16', name:'Radha Enterprises', category:'Hexane, LLP', cycleType:'days', cycleDays:30},
+ {id:'v17', name:'Vishal Walke', category:'Lables', cycleType:'advance100'},
+];
+
+let state = { vendors: [], invoices: [], cashlog: {}, accounts: [], repayments: [], tab: 'dashboard', storageOK: true,
+  filters: { payments: { q:'', category:'all', approval:'all', payment:'all', account:'all' } } };
+
+function uid(p){ return p + Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+
+/* ---------------- Backend (Google Apps Script + Sheets) ----------------
+   1. Create a new Google Sheet.
+   2. Extensions -> Apps Script, paste the code from invisel-backend.gs, save.
+   3. Deploy -> New deployment -> type "Web app" -> Execute as "Me" -> Who has access "Anyone".
+   4. Copy the deployed web app URL and paste it below, replacing the placeholder. */
+const APPS_SCRIPT_URL = 'https://script.google.com/a/macros/invisel.in/s/AKfycbx0iN8xmjsyBl2bOh4nhko6hJr6i3okZb6pwsXRrW_RRYKJ99Iel_MpsapfxKL7waWNSg/exec';
+const BACKEND_CONFIGURED = APPS_SCRIPT_URL.indexOf('PASTE_YOUR') === -1 && APPS_SCRIPT_URL.startsWith('http');
+
+async function fetchAllFromBackend(){
+  if(!BACKEND_CONFIGURED) return { status:'unconfigured' };
+  try{
+    const res = await fetch(`${APPS_SCRIPT_URL}?action=all`);
+    const json = await res.json();
+    if(!json || !json.ok) throw new Error('bad response');
+    const out = {};
+    for(const k in json.data){
+      try{ out[k] = JSON.parse(json.data[k]); }catch(e){ out[k] = null; }
+    }
+    state.storageOK = true;
+    return { status:'ok', data: out };
+  }catch(e){
+    state.storageOK = false;
+    return { status:'network_error' };
+  }
+}
+async function storageSet(key, value){
+  if(!BACKEND_CONFIGURED){ state.storageOK = false; return; }
+  try{
+    await fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ key, value: JSON.stringify(value) })
+    });
+    state.storageOK = true;
+  }catch(e){ state.storageOK = false; }
+}
+
+async function saveVendors(){ await storageSet(KEYS.vendors, state.vendors); saveLocalCache(); }
+async function saveInvoices(){ await storageSet(KEYS.invoices, state.invoices); saveLocalCache(); }
+async function saveCashlog(){ await storageSet(KEYS.cashlog, state.cashlog); saveLocalCache(); }
+async function saveAccounts(){ await storageSet(KEYS.accounts, state.accounts); saveLocalCache(); }
+async function saveRepayments(){ await storageSet(KEYS.repayments, state.repayments); saveLocalCache(); }
+
+
+/* ---------------- Date / money helpers ---------------- */
+function toISO(d){ const y=d.getFullYear(); const m=String(d.getMonth()+1).padStart(2,'0'); const day=String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${day}`; }
+function todayISO(){ return toISO(new Date()); }
+function parseISO(s){ const [y,m,d]=s.split('-').map(Number); return new Date(y, m-1, d); }
+function fmtDate(s){ if(!s) return '—'; const d=parseISO(s); return d.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}); }
+function fmtMoney(n){ n = Number(n)||0; return '₹' + n.toLocaleString('en-IN',{maximumFractionDigits:0}); }
+function daysBetween(a,b){ return Math.round((parseISO(b)-parseISO(a))/86400000); }
+
+function calcDueDate(vendor, invoiceDateISO){
+  const d = parseISO(invoiceDateISO);
+  if(!vendor) return invoiceDateISO;
+  if(vendor.cycleType==='advance100' || vendor.cycleType==='advance50') return invoiceDateISO;
+  if(vendor.cycleType==='days'){
+    const nd = new Date(d); nd.setDate(nd.getDate() + (vendor.cycleDays||0));
+    return toISO(nd);
+  }
+  if(vendor.cycleType==='fixedDate'){
+    const day = vendor.fixedDay||1;
+    let target;
+    if(vendor.nextMonth){ target = new Date(d.getFullYear(), d.getMonth()+1, day); }
+    else if(d.getDate() > day){ target = new Date(d.getFullYear(), d.getMonth()+1, day); }
+    else { target = new Date(d.getFullYear(), d.getMonth(), day); }
+    return toISO(target);
+  }
+  return invoiceDateISO;
+}
+function cycleLabel(v){
+  if(v.cycleType==='advance100') return '100% Advance';
+  if(v.cycleType==='advance50') return '50% Advance';
+  if(v.cycleType==='days') return v.cycleDays + ' Days';
+  if(v.cycleType==='fixedDate') return ordinal(v.fixedDay) + ' of ' + (v.nextMonth? 'Next Month':'Every Month');
+  return '—';
+}
+function ordinal(n){ const s=['th','st','nd','rd']; const v=n%100; return n+(s[(v-20)%10]||s[v]||s[0]); }
+
+/* ---------------- Accounts helpers ---------------- */
+function accountById(id){ return state.accounts.find(a=>a.id===id); }
+function bankAccounts(){ return state.accounts.filter(a=>a.type==='bank'); }
+function creditCards(){ return state.accounts.filter(a=>a.type==='creditcard'); }
+function accountLabel(id){ const a=accountById(id); return a? a.name : ''; }
+function latestOpeningBalance(accountId){
+  const log = state.cashlog[accountId];
+  if(!log) return null;
+  const dates = Object.keys(log).sort();
+  if(!dates.length) return null;
+  const lastDate = dates[dates.length-1];
+  return { date:lastDate, amount: log[lastDate] };
+}
+function cardCharged(accountId){
+  return state.invoices.filter(i=>i.accountId===accountId && i.paymentStatus==='paid').reduce((s,i)=>s+i.netPayable,0);
+}
+function cardRepaid(accountId){
+  return state.repayments.filter(r=>r.accountId===accountId).reduce((s,r)=>s+r.amount,0);
+}
+function cardOutstanding(accountId){ return cardCharged(accountId) - cardRepaid(accountId); }
+function accountOptions(selectedId){
+  const banks = bankAccounts(), cards = creditCards();
+  let html = `<option value="" ${!selectedId?'selected':''}>Not assigned yet</option>`;
+  if(banks.length){
+    html += `<optgroup label="Bank accounts">` + banks.map(a=>`<option value="${a.id}" ${selectedId===a.id?'selected':''}>${a.name}</option>`).join('') + `</optgroup>`;
+  }
+  if(cards.length){
+    html += `<optgroup label="Credit cards">` + cards.map(a=>`<option value="${a.id}" ${selectedId===a.id?'selected':''}>${a.name}</option>`).join('') + `</optgroup>`;
+  }
+  if(!banks.length && !cards.length){
+    html += `<option value="" disabled>No accounts added yet — add one from the Accounts tab</option>`;
+  }
+  return html;
+}
+function nextDueDate(account){
+  if(!account.dueDay) return null;
+  const today = new Date();
+  let target = new Date(today.getFullYear(), today.getMonth(), account.dueDay);
+  if(today.getDate() > account.dueDay) target = new Date(today.getFullYear(), today.getMonth()+1, account.dueDay);
+  return toISO(target);
+}
+
+/* ---------------- Toast ---------------- */
+let toastTimer;
+function toast(msg){
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>el.classList.remove('show'), 2200);
+}
+
+/* ---------------- Modal ---------------- */
+function openModal(html){
+  document.getElementById('modalRoot').innerHTML = `<div class="modal-back" onclick="if(event.target===this) closeModal()"><div class="modal">${html}</div></div>`;
+}
+function closeModal(){ document.getElementById('modalRoot').innerHTML=''; }
+
+/* ---------------- Identity (who's using this session) ---------------- */
+function getUserName(){ return localStorage.getItem('invisel_username') || ''; }
+function maybePromptName(){
+  if(getUserName() || localStorage.getItem('invisel_username_skipped')) return;
+  openModal(`
+    <h3>What's your name?</h3>
+    <div class="modal-sub">Shown next to actions you take — sent for approval, marked paid, and so on — so the team can see who did what.</div>
+    <div class="field"><input type="text" id="nm_name" placeholder="Your name" onkeydown="if(event.key==='Enter') saveUserName()"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="localStorage.setItem('invisel_username_skipped','1'); closeModal();">Skip for now</button>
+      <button class="btn primary" onclick="saveUserName()">Save</button>
+    </div>
+  `);
+}
+function promptNameChange(){
+  openModal(`
+    <h3>Your name</h3>
+    <div class="modal-sub">Used to label actions you take in the ledger.</div>
+    <div class="field"><input type="text" id="nm_name" value="${getUserName()}" placeholder="Your name" onkeydown="if(event.key==='Enter') saveUserName()"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn primary" onclick="saveUserName()">Save</button>
+    </div>
+  `);
+}
+function saveUserName(){
+  const v = document.getElementById('nm_name').value.trim();
+  if(!v) return;
+  localStorage.setItem('invisel_username', v);
+  localStorage.removeItem('invisel_username_skipped');
+  closeModal();
+  render();
+}
+
+/* ---------------- Init (local cache-first, background sync) ---------------- */
+const CACHE_KEY = 'invisel_cache_v1';
+function saveLocalCache(){
+  try{
+    localStorage.setItem(CACHE_KEY, JSON.stringify({
+      vendors: state.vendors, invoices: state.invoices, cashlog: state.cashlog,
+      accounts: state.accounts, repayments: state.repayments, cachedAt: Date.now()
+    }));
+  }catch(e){}
+}
+function loadLocalCache(){
+  try{ const raw = localStorage.getItem(CACHE_KEY); return raw ? JSON.parse(raw) : null; }catch(e){ return null; }
+}
+
+async function applyLoadedData(common){
+  const vendors = common.vendors;
+  state.vendors = (vendors && vendors.length) ? vendors : JSON.parse(JSON.stringify(DEFAULT_VENDORS));
+  if(!vendors || !vendors.length) await saveVendors();
+  state.invoices = common.invoices || [];
+  state.accounts = common.accounts || [];
+  state.repayments = common.repayments || [];
+
+  // Migrate old single-balance cash log ({date: amount}) into a per-account shape ({accountId: {date: amount}})
+  let cl = common.cashlog || {};
+  const vals = Object.values(cl);
+  const isOldFlatFormat = vals.length>0 && typeof vals[0] === 'number';
+  if(isOldFlatFormat){
+    let primary = state.accounts.find(a=>a.type==='bank');
+    if(!primary){
+      primary = { id: uid('acc_'), name:'Primary Account', type:'bank', purpose:'Auto-created during upgrade — rename or replace as needed.', createdAt: Date.now() };
+      state.accounts.push(primary);
+      await saveAccounts();
+    }
+    cl = { [primary.id]: cl };
+    await storageSet(KEYS.cashlog, cl);
+  }
+  state.cashlog = cl;
+}
+
+function backendResultToCommon(all){
+  return { vendors: all[KEYS.vendors], invoices: all[KEYS.invoices], cashlog: all[KEYS.cashlog], accounts: all[KEYS.accounts], repayments: all[KEYS.repayments] };
+}
+
+async function init(){
+  const cached = loadLocalCache();
+  if(cached){
+    // Fast path: paint instantly from what's on this device, then quietly refresh from the Sheet.
+    await applyLoadedData(cached);
+    document.getElementById('loading').style.display='none';
+    document.getElementById('app').style.display='block';
+    render();
+    setTimeout(maybePromptName, 400);
+    refreshFromBackend();
+    return;
+  }
+  // First-ever load on this device/browser: nothing to show yet, so wait for the Sheet.
+  await loadAppData();
+}
+
+async function refreshFromBackend(){
+  const result = await fetchAllFromBackend();
+  if(result.status !== 'ok'){ render(); return; } // storageOK is already false; banner will reflect it
+  await applyLoadedData(backendResultToCommon(result.data));
+  saveLocalCache();
+  render();
+}
+
+async function loadAppData(){
+  const result = await fetchAllFromBackend();
+
+  if(result.status === 'network_error'){
+    document.getElementById('loading').innerHTML = `
+      <div style="max-width:300px;text-align:center;padding:0 16px;">
+        <div class="mono" style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-soft);margin-bottom:12px;">Invisel Payment Ledger</div>
+        <p style="margin:0 0 14px 0;font-size:13.5px;color:var(--red);">Couldn't reach the Google Sheet. Check your internet connection, then reload the page.</p>
+        <button class="btn primary" style="width:100%;" onclick="location.reload()">Retry</button>
+      </div>`;
+    return;
+  }
+
+  const common = result.status === 'ok' ? backendResultToCommon(result.data) : {};
+  await applyLoadedData(common);
+
+  document.getElementById('loading').style.display='none';
+  document.getElementById('app').style.display='block';
+  render();
+  saveLocalCache();
+  setTimeout(maybePromptName, 400);
+}
+
+/* ---------------- Nav / routing ---------------- */
+const TABS = [
+  {id:'dashboard', label:'Dashboard'},
+  {id:'newentry', label:'New Invoice'},
+  {id:'payments', label:'All Payments'},
+  {id:'approvals', label:'Approvals'},
+  {id:'calendar', label:'Cash Calendar'},
+  {id:'accounts', label:'Accounts'},
+  {id:'vendors', label:'Vendors'},
+  {id:'history', label:'Paid History'},
+];
+function setTab(t){ state.tab = t; render(); window.scrollTo(0,0); }
+
+function renderNav(){
+  document.getElementById('navtabs').innerHTML = TABS.map(t=>
+    `<button class="${state.tab===t.id?'active':''}" onclick="setTab('${t.id}')"><span class="dot"></span>${t.label}</button>`
+  ).join('');
+}
+
+function render(){
+  renderNav();
+  const foot = document.getElementById('sidefoot');
+  if(foot){
+    const syncLine = !BACKEND_CONFIGURED ? 'Not connected to Google Sheets yet.' : (state.storageOK ? 'Synced to your Google Sheet.' : "Can't reach your Google Sheet.");
+    const name = getUserName();
+    foot.innerHTML = `${syncLine}<div style="margin-top:6px;">${name? `You: <strong style="color:#EDEFE7;">${name}</strong>` : 'Name not set'} · <a href="javascript:void(0)" onclick="promptNameChange()" style="color:#B9C0B2;">change</a></div>`;
+  }
+  const main = document.getElementById('main');
+  let html = '';
+  if(state.tab==='dashboard') html = renderDashboard();
+  else if(state.tab==='newentry') html = renderNewEntry();
+  else if(state.tab==='payments') html = renderPayments();
+  else if(state.tab==='approvals') html = renderApprovals();
+  else if(state.tab==='calendar') html = renderCalendar();
+  else if(state.tab==='accounts') html = renderAccounts();
+  else if(state.tab==='vendors') html = renderVendors();
+  else if(state.tab==='history') html = renderHistory();
+  main.innerHTML = bannerHTML() + html;
+  main.classList.remove('fade-in');
+  void main.offsetWidth;
+  main.classList.add('fade-in');
+  if(state.tab==='newentry'){ onVendorChange(); onDueDateAuto(); }
+}
+function bannerHTML(){
+  if(!BACKEND_CONFIGURED) return `<div class="banner">This copy isn't connected to a Google Sheet yet, so nothing will be saved between visits. Follow the setup steps that came with this file, then paste your Apps Script URL in near the top of the code.</div>`;
+  if(!state.storageOK) return `<div class="banner">Can't reach your Google Sheet right now — check your internet connection or that the Apps Script deployment is still live. Recent changes may not have saved.</div>`;
+  return '';
+}
+
+/* ---------------- Derived data ---------------- */
+function vendorById(id){ return state.vendors.find(v=>v.id===id); }
+function isOverdue(inv){ return inv.paymentStatus!=='paid' && inv.dueDate < todayISO(); }
+function statusStamp(inv){
+  if(inv.paymentStatus==='paid') return `<span class="stamp green">Paid</span>`;
+  if(isOverdue(inv)) return `<span class="stamp red">Overdue</span>`;
+  if(inv.paymentStatus==='scheduled') return `<span class="stamp accent">Scheduled</span>`;
+  return `<span class="stamp grey">Pending</span>`;
+}
+function approvalStamp(inv){
+  if(inv.approvalStatus==='approved') return `<span class="stamp green">Approved</span>`;
+  if(inv.approvalStatus==='sent_for_approval') return `<span class="stamp amber">Sent for Approval</span>`;
+  return `<span class="stamp grey">Not Sent</span>`;
+}
+function subtitleFor(i){
+  const bits = [
+    i.invoiceNumber ? 'Inv #'+i.invoiceNumber : null,
+    i.isAdhoc ? 'Ad-hoc' : null,
+    accountLabel(i.accountId) || null
+  ].filter(Boolean);
+  return bits.join(' · ');
+}
+
+/* ================= DASHBOARD ================= */
+function renderDashboard(){
+  const today = todayISO();
+  const unpaid = state.invoices.filter(i=>i.paymentStatus!=='paid');
+  const totalOutstanding = unpaid.reduce((s,i)=>s+i.netPayable,0);
+  const overdue = unpaid.filter(isOverdue);
+  const overdueAmt = overdue.reduce((s,i)=>s+i.netPayable,0);
+  const in7 = unpaid.filter(i=>!isOverdue(i) && daysBetween(today,i.dueDate)<=7 && daysBetween(today,i.dueDate)>=0);
+  const in7Amt = in7.reduce((s,i)=>s+i.netPayable,0);
+  const awaiting = state.invoices.filter(i=>i.approvalStatus==='sent_for_approval');
+  const monthPrefix = today.slice(0,7);
+  const tdsThisMonth = state.invoices.filter(i=>i.invoiceDate.slice(0,7)===monthPrefix && i.tdsApplicable).reduce((s,i)=>s+i.tdsAmount,0);
+  const sentToday = state.invoices.filter(i=>i.sentForApprovalDate===today);
+  const dueToday = state.invoices.filter(i=>i.dueDate===today && i.paymentStatus!=='paid');
+  const recentInvoices = [...state.invoices].sort((a,b)=> b.createdAt - a.createdAt).slice(0,6);
+
+  return `
+  <div class="pagehead">
+    <h1>Dashboard</h1>
+    <div class="today">${fmtDate(today)}${getUserName()? ` · ${getUserName()}`:''} <a href="javascript:void(0)" onclick="promptNameChange()" style="color:var(--accent);text-decoration:none;">${getUserName()?'(change)':'(set your name)'}</a></div>
+  </div>
+
+  <div class="grid cards4">
+    <div class="card ${overdue.length? 'bad':''}">
+      <div class="label">Overdue</div>
+      <div class="value">${fmtMoney(overdueAmt)}</div>
+      <div class="sub">${overdue.length} payment${overdue.length===1?'':'s'} past due</div>
+    </div>
+    <div class="card ${in7.length? 'warn':''}">
+      <div class="label">Due in 7 days</div>
+      <div class="value">${fmtMoney(in7Amt)}</div>
+      <div class="sub">${in7.length} payment${in7.length===1?'':'s'} coming up</div>
+    </div>
+    <div class="card">
+      <div class="label">Total Outstanding</div>
+      <div class="value">${fmtMoney(totalOutstanding)}</div>
+      <div class="sub">${unpaid.length} unpaid invoice${unpaid.length===1?'':'s'}</div>
+    </div>
+    <div class="card ${awaiting.length? 'warn':''}">
+      <div class="label">Awaiting Approval</div>
+      <div class="value mono">${awaiting.length}</div>
+      <div class="sub">Sent, not yet approved</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-head"><h2>Today — ${fmtDate(today)}</h2></div>
+    <div class="row2">
+      <div>
+        <div class="label" style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-soft);margin-bottom:8px;">Due today (${dueToday.length})</div>
+        ${dueToday.length? dueToday.map(i=>`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line);font-size:13px;"><span>${i.vendorName}</span><span class="mono">${fmtMoney(i.netPayable)}</span></div>`).join('') : `<div class="muted" style="font-size:13px;">Nothing due today.</div>`}
+      </div>
+      <div>
+        <div class="label" style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-soft);margin-bottom:8px;">Sent for approval today (${sentToday.length})</div>
+        ${sentToday.length? sentToday.map(i=>`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line);font-size:13px;"><span>${i.vendorName}</span><span class="mono">${fmtMoney(i.netPayable)}</span></div>`).join('') : `<div class="muted" style="font-size:13px;">Nothing sent for approval yet today.</div>`}
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-head"><h2>TDS deducted this month</h2></div>
+    <div class="value mono" style="font-size:20px;">${fmtMoney(tdsThisMonth)}</div>
+  </div>
+
+  ${state.accounts.length ? `
+  <div class="section">
+    <div class="section-head"><h2>Accounts</h2><button class="btn small" onclick="setTab('accounts')">Manage</button></div>
+    <div class="grid cards4">
+      ${bankAccounts().map(a=>{ const bal=latestOpeningBalance(a.id); return `
+        <div class="card"><div class="label">${a.name}</div><div class="value">${bal? fmtMoney(bal.amount):'—'}</div><div class="sub">${bal? 'as of '+fmtDate(bal.date):'no balance logged'}</div></div>`; }).join('')}
+      ${creditCards().map(a=>{ const out=cardOutstanding(a.id); const due=nextDueDate(a); const nearDue = due && daysBetween(today,due)<=5; return `
+        <div class="card ${nearDue?'warn':''}"><div class="label">${a.name}</div><div class="value">${fmtMoney(out)}</div><div class="sub">${a.creditLimit? 'of '+fmtMoney(a.creditLimit)+' limit':''}${due? ' · due '+fmtDate(due):''}</div></div>`; }).join('')}
+    </div>
+  </div>` : ''}
+
+  <div class="section">
+    <div class="section-head"><h2>Recent activity</h2><button class="btn small" onclick="setTab('payments')">View all</button></div>
+    <div class="tablewrap">
+    <table>
+      <thead><tr><th>Vendor</th><th>Category</th><th class="amt">Net Payable</th><th>Due</th><th>Approval</th><th>Payment</th></tr></thead>
+      <tbody>
+        ${recentInvoices.length? recentInvoices.map(i=>`
+          <tr>
+            <td><div class="vendorname">${i.vendorName}</div>${subtitleFor(i)?`<div class="vendorcat">${subtitleFor(i)}</div>`:''}</td>
+            <td class="muted">${i.category}</td>
+            <td class="amt">${fmtMoney(i.netPayable)}</td>
+            <td class="mono">${fmtDate(i.dueDate)}</td>
+            <td>${approvalStamp(i)}</td>
+            <td>${statusStamp(i)}</td>
+          </tr>`).join('') : `<tr><td colspan="6" class="empty">No invoices logged yet. Add your first one from "New Invoice".</td></tr>`}
+      </tbody>
+    </table>
+    </div>
+  </div>
+  `;
+}
+
+/* ================= NEW ENTRY ================= */
+function renderNewEntry(){
+  const vendorOptions = state.vendors.map(v=>`<option value="${v.id}">${v.name} — ${cycleLabel(v)}</option>`).join('');
+  return `
+  <div class="pagehead"><h1>New Invoice / Bill</h1></div>
+  <div class="formcard">
+    <form onsubmit="return submitInvoice(event)">
+      <div class="field">
+        <label>Vendor</label>
+        <select id="f_vendor" onchange="onVendorChange()">
+          ${vendorOptions}
+          <option value="__adhoc">+ Ad-hoc / Agency payment (not a regular vendor)</option>
+        </select>
+      </div>
+
+      <div id="adhocFields" style="display:none;">
+        <div class="field"><label>Agency / payee name</label><input type="text" id="f_adhocname" placeholder="e.g. Design agency, freelancer, courier"></div>
+      </div>
+
+      <div class="field">
+        <label>Category</label>
+        <input type="text" id="f_category" placeholder="e.g. Marketing, Raw Material, Admin & General Expenses">
+      </div>
+
+      <div class="field">
+        <label>Invoice number (optional)</label>
+        <input type="text" id="f_invnum" placeholder="e.g. INV-2026-0142">
+      </div>
+
+      <div class="row2">
+        <div class="field">
+          <label>Invoice date</label>
+          <input type="date" id="f_invdate" value="${todayISO()}" onchange="onDueDateAuto()">
+        </div>
+        <div class="field">
+          <label>Invoice amount (₹)</label>
+          <input type="number" id="f_amount" min="0" step="0.01" placeholder="0.00" oninput="onDueDateAuto()">
+        </div>
+      </div>
+
+      <hr class="divider">
+
+      <div class="field">
+        <label style="display:flex;align-items:center;gap:8px;font-weight:600;">
+          <input type="checkbox" id="f_tdsOn" style="width:auto;" onchange="onDueDateAuto()"> Apply TDS
+        </label>
+      </div>
+      <div class="row2" id="tdsRow">
+        <div class="field">
+          <label>TDS rate</label>
+          <select id="f_tdsRate" onchange="onTdsRateChange()">
+            <option value="1">1%</option>
+            <option value="2" selected>2%</option>
+            <option value="10">10%</option>
+            <option value="custom">Custom %</option>
+          </select>
+        </div>
+        <div class="field" id="tdsCustomWrap" style="display:none;">
+          <label>Custom rate (%)</label>
+          <input type="number" id="f_tdsCustom" min="0" step="0.01" oninput="onDueDateAuto()">
+        </div>
+      </div>
+
+      <hr class="divider">
+
+      <div class="row2">
+        <div class="field">
+          <label>Due date</label>
+          <input type="date" id="f_duedate">
+          <span class="hint" id="dueHint">Auto-calculated from the vendor's payment cycle. You can override it.</span>
+        </div>
+        <div class="field">
+          <label>TDS amount</label>
+          <input type="text" id="f_tdsPreview" class="mono" disabled value="₹0">
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Net payable</label>
+        <input type="text" id="f_netPreview" class="mono" disabled value="₹0" style="font-weight:600;">
+      </div>
+
+      <div class="field">
+        <label>Pay from (optional — can be set later when marking paid)</label>
+        <select id="f_account">${accountOptions('')}</select>
+      </div>
+
+      <div class="field">
+        <label>Notes (optional)</label>
+        <textarea id="f_notes" rows="2" placeholder="PO number, reference, anything worth remembering"></textarea>
+      </div>
+
+      <div class="field">
+        <label>Attach invoice file (optional)</label>
+        <input type="file" id="f_attachment" accept=".pdf,.png,.jpg,.jpeg,.webp">
+        <span class="hint">PDF or image, up to 4MB. Saved to Google Drive and linked to this entry.</span>
+      </div>
+
+      <div class="modal-actions" style="justify-content:flex-start;margin-top:6px;">
+        <button type="submit" class="btn primary">Add invoice</button>
+      </div>
+    </form>
+  </div>
+  `;
+}
+
+function onVendorChange(){
+  const sel = document.getElementById('f_vendor');
+  const isAdhoc = sel.value === '__adhoc';
+  document.getElementById('adhocFields').style.display = isAdhoc? 'block':'none';
+  if(!isAdhoc){
+    const v = vendorById(sel.value);
+    if(v) document.getElementById('f_category').value = v.category;
+  } else {
+    document.getElementById('f_category').value = '';
+  }
+  onDueDateAuto();
+}
+function onTdsRateChange(){
+  const isCustom = document.getElementById('f_tdsRate').value === 'custom';
+  document.getElementById('tdsCustomWrap').style.display = isCustom? 'block':'none';
+  onDueDateAuto();
+}
+function currentTdsRate(){
+  const sel = document.getElementById('f_tdsRate');
+  if(!sel) return 0;
+  if(sel.value==='custom') return Number(document.getElementById('f_tdsCustom').value)||0;
+  return Number(sel.value)||0;
+}
+function onDueDateAuto(){
+  const sel = document.getElementById('f_vendor');
+  const invDate = document.getElementById('f_invdate').value || todayISO();
+  const dueEl = document.getElementById('f_duedate');
+  if(sel.value !== '__adhoc'){
+    const v = vendorById(sel.value);
+    if(v && dueEl){ dueEl.value = calcDueDate(v, invDate); }
+  }
+  const amount = Number(document.getElementById('f_amount').value)||0;
+  const tdsOn = document.getElementById('f_tdsOn').checked;
+  const rate = tdsOn? currentTdsRate() : 0;
+  const tdsAmt = tdsOn? Math.round(amount * rate)/100 : 0;
+  const net = amount - tdsAmt;
+  document.getElementById('f_tdsPreview').value = fmtMoney(tdsAmt);
+  document.getElementById('f_netPreview').value = fmtMoney(net);
+}
+
+async function submitInvoice(e){
+  e.preventDefault();
+  const sel = document.getElementById('f_vendor');
+  const isAdhoc = sel.value === '__adhoc';
+  const vendor = isAdhoc? null : vendorById(sel.value);
+  const vendorName = isAdhoc? (document.getElementById('f_adhocname').value.trim() || 'Ad-hoc payee') : vendor.name;
+  const category = document.getElementById('f_category').value.trim() || 'Uncategorised';
+  const invoiceDate = document.getElementById('f_invdate').value || todayISO();
+  const amount = Number(document.getElementById('f_amount').value)||0;
+  if(amount <= 0){ toast('Enter an invoice amount.'); return false; }
+  const tdsOn = document.getElementById('f_tdsOn').checked;
+  const rate = tdsOn? currentTdsRate() : 0;
+  const tdsAmount = tdsOn? Math.round(amount*rate)/100 : 0;
+  const netPayable = amount - tdsAmount;
+  let dueDate = document.getElementById('f_duedate').value;
+  if(!dueDate) dueDate = isAdhoc? invoiceDate : calcDueDate(vendor, invoiceDate);
+
+  const inv = {
+    id: uid('inv_'),
+    vendorId: isAdhoc? null : vendor.id,
+    vendorName, category, isAdhoc,
+    invoiceNumber: document.getElementById('f_invnum').value.trim(),
+    invoiceDate, invoiceAmount: amount,
+    tdsApplicable: tdsOn, tdsRate: rate, tdsAmount, netPayable,
+    dueDate,
+    accountId: document.getElementById('f_account').value || null,
+    approvalStatus: 'not_sent', sentForApprovalDate: null, approvedDate: null,
+    paymentStatus: 'pending', scheduledDate: null, paidDate: null, paymentRef: '',
+    notes: document.getElementById('f_notes').value.trim(),
+    attachmentUrl: null, attachmentName: null,
+    createdBy: getUserName() || null,
+    createdAt: Date.now()
+  };
+  state.invoices.push(inv);
+  const attachInput = document.getElementById('f_attachment');
+  const attachFile = attachInput && attachInput.files && attachInput.files[0];
+  toast('Invoice added.');
+  setTab('payments');
+  saveInvoices().then(()=>{ if(!state.storageOK) render(); });
+  if(attachFile) uploadAttachment(inv.id, attachFile);
+  return false;
+}
+
+/* ---------------- Attachments (Drive-backed) ---------------- */
+function fileToBase64(file){
+  return new Promise((resolve, reject)=>{
+    const reader = new FileReader();
+    reader.onload = ()=> resolve(String(reader.result).split(',')[1] || '');
+    reader.onerror = ()=> reject(new Error('read failed'));
+    reader.readAsDataURL(file);
+  });
+}
+async function uploadAttachment(invoiceId, file){
+  if(!file) return;
+  if(!BACKEND_CONFIGURED){ toast("Can't upload — connect a Google Sheet first."); return; }
+  if(file.size > 4*1024*1024){ toast('That file is over 4MB — attach a smaller copy.'); return; }
+  toast('Uploading attachment…');
+  try{
+    const base64 = await fileToBase64(file);
+    const res = await fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action:'uploadFile', filename:file.name, mimeType:file.type||'application/octet-stream', base64, invoiceId })
+    });
+    const json = await res.json();
+    if(!json || !json.ok) throw new Error((json && json.error) || 'upload failed');
+    const inv = state.invoices.find(x=>x.id===invoiceId);
+    if(inv){
+      inv.attachmentUrl = json.url;
+      inv.attachmentName = file.name;
+      render();
+      toast('Invoice file attached.');
+      saveInvoices().then(()=>{ if(!state.storageOK) render(); });
+    }
+  }catch(e){
+    toast("Couldn't upload the attachment — check your connection and try again.");
+  }
+}
+function openAttachModal(id){
+  openModal(`
+    <h3>Attach invoice file</h3>
+    <div class="field"><input type="file" id="att_file" accept=".pdf,.png,.jpg,.jpeg,.webp"></div>
+    <p class="hint">PDF or image, up to 4MB.</p>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn primary" onclick="confirmAttach('${id}')">Upload</button>
+    </div>
+  `);
+}
+function confirmAttach(id){
+  const f = document.getElementById('att_file').files[0];
+  if(!f){ toast('Choose a file first.'); return; }
+  closeModal();
+  uploadAttachment(id, f);
+}
+
+/* ================= ALL PAYMENTS ================= */
+function renderPayments(){
+  const f = state.filters.payments;
+  const categories = Array.from(new Set(state.invoices.map(i=>i.category))).sort();
+  let rows = state.invoices.slice();
+  if(f.q){
+    const q = f.q.toLowerCase();
+    rows = rows.filter(i=> i.vendorName.toLowerCase().includes(q) || (i.invoiceNumber && i.invoiceNumber.toLowerCase().includes(q)));
+  }
+  if(f.category!=='all') rows = rows.filter(i=>i.category===f.category);
+  if(f.approval!=='all') rows = rows.filter(i=>i.approvalStatus===f.approval);
+  if(f.payment!=='all') rows = rows.filter(i=>i.payment==='__never' ? true : i.paymentStatus===f.payment);
+  if(f.account!=='all') rows = rows.filter(i=> f.account==='__none' ? !i.accountId : i.accountId===f.account);
+  rows.sort((a,b)=> a.dueDate.localeCompare(b.dueDate));
+
+  return `
+  <div class="pagehead"><h1>All Payments</h1><button class="btn primary" onclick="setTab('newentry')">+ New invoice</button></div>
+
+  <div class="filters">
+    <input type="text" placeholder="Search vendor or invoice #…" value="${f.q}" oninput="state.filters.payments.q=this.value; render();">
+    <select onchange="state.filters.payments.category=this.value; render();">
+      <option value="all" ${f.category==='all'?'selected':''}>All categories</option>
+      ${categories.map(c=>`<option value="${c}" ${f.category===c?'selected':''}>${c}</option>`).join('')}
+    </select>
+    <select onchange="state.filters.payments.approval=this.value; render();">
+      <option value="all" ${f.approval==='all'?'selected':''}>Any approval status</option>
+      <option value="not_sent" ${f.approval==='not_sent'?'selected':''}>Not Sent</option>
+      <option value="sent_for_approval" ${f.approval==='sent_for_approval'?'selected':''}>Sent for Approval</option>
+      <option value="approved" ${f.approval==='approved'?'selected':''}>Approved</option>
+    </select>
+    <select onchange="state.filters.payments.payment=this.value; render();">
+      <option value="all" ${f.payment==='all'?'selected':''}>Any payment status</option>
+      <option value="pending" ${f.payment==='pending'?'selected':''}>Pending</option>
+      <option value="scheduled" ${f.payment==='scheduled'?'selected':''}>Scheduled</option>
+      <option value="paid" ${f.payment==='paid'?'selected':''}>Paid</option>
+    </select>
+    <select onchange="state.filters.payments.account=this.value; render();">
+      <option value="all" ${f.account==='all'?'selected':''}>Any account</option>
+      <option value="__none" ${f.account==='__none'?'selected':''}>Not assigned</option>
+      ${state.accounts.map(a=>`<option value="${a.id}" ${f.account===a.id?'selected':''}>${a.name}</option>`).join('')}
+    </select>
+  </div>
+
+  <div class="section" style="margin-top:0;">
+  <div class="tablewrap">
+  <table>
+    <thead><tr>
+      <th>Vendor</th><th>Category</th><th class="amt">Invoice</th><th class="amt">TDS</th><th class="amt">Net Payable</th><th>Due</th><th>Approval</th><th>Payment</th><th></th>
+    </tr></thead>
+    <tbody>
+      ${rows.length? rows.map(i=>`
+        <tr>
+          <td><div class="vendorname">${i.vendorName}</div>${subtitleFor(i)?`<div class="vendorcat">${subtitleFor(i)}</div>`:''}${i.attachmentUrl?`<a href="${i.attachmentUrl}" target="_blank" rel="noopener" style="font-size:11px;color:var(--accent);text-decoration:none;display:inline-block;margin-top:3px;">📎 ${i.attachmentName||'View file'}</a>`:''}</td>
+          <td class="muted">${i.category}</td>
+          <td class="amt">${fmtMoney(i.invoiceAmount)}</td>
+          <td class="amt">${i.tdsApplicable? fmtMoney(i.tdsAmount)+' ('+i.tdsRate+'%)' : '—'}</td>
+          <td class="amt" style="font-weight:600;">${fmtMoney(i.netPayable)}</td>
+          <td class="mono">${fmtDate(i.dueDate)}</td>
+          <td>${approvalStamp(i)}</td>
+          <td>${statusStamp(i)}</td>
+          <td>${rowActions(i)}</td>
+        </tr>`).join('') : `<tr><td colspan="9" class="empty">No invoices match these filters.</td></tr>`}
+    </tbody>
+  </table>
+  </div>
+  </div>
+  `;
+}
+
+function rowActions(i){
+  const acts = [];
+  if(i.approvalStatus==='not_sent') acts.push(`<button class="btn small" onclick="markApproval('${i.id}','sent_for_approval')">Send for approval</button>`);
+  if(i.approvalStatus==='sent_for_approval') acts.push(`<button class="btn small" onclick="markApproval('${i.id}','approved')">Mark approved</button>`);
+  if(i.paymentStatus!=='paid') acts.push(`<button class="btn small" onclick="openMarkPaid('${i.id}')">Mark paid</button>`);
+  if(!i.attachmentUrl) acts.push(`<button class="btn small" onclick="openAttachModal('${i.id}')">Attach invoice</button>`);
+  return `<div style="display:flex;gap:6px;flex-wrap:wrap;">${acts.join('')}</div>`;
+}
+
+function markApproval(id, status){
+  const inv = state.invoices.find(i=>i.id===id);
+  if(!inv) return;
+  inv.approvalStatus = status;
+  if(status==='sent_for_approval'){ inv.sentForApprovalDate = todayISO(); inv.sentForApprovalBy = getUserName() || null; }
+  if(status==='approved'){ inv.approvedDate = todayISO(); inv.approvedBy = getUserName() || null; }
+  render();
+  toast(status==='sent_for_approval' ? 'Sent for approval — logged today.' : 'Marked approved.');
+  saveInvoices().then(()=>{ if(!state.storageOK) render(); });
+}
+function resetApproval(id){
+  const inv = state.invoices.find(i=>i.id===id);
+  if(!inv) return;
+  inv.approvalStatus='not_sent'; inv.sentForApprovalDate=null; inv.approvedDate=null; inv.sentForApprovalBy=null; inv.approvedBy=null;
+  render();
+  saveInvoices().then(()=>{ if(!state.storageOK) render(); });
+}
+
+function openMarkPaid(id){
+  const inv = state.invoices.find(i=>i.id===id);
+  if(!inv) return;
+  openModal(`
+    <h3>Mark as paid</h3>
+    <div class="modal-sub">${inv.vendorName} · ${fmtMoney(inv.netPayable)}</div>
+    <div class="field"><label>Payment date</label><input type="date" id="m_date" value="${todayISO()}"></div>
+    <div class="field"><label>Paid from</label><select id="m_account">${accountOptions(inv.accountId||'')}</select></div>
+    <div class="field"><label>Reference / UTR (optional)</label><input type="text" id="m_ref" placeholder="Bank reference number"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn primary" onclick="confirmMarkPaid('${id}')">Confirm paid</button>
+    </div>
+  `);
+}
+function confirmMarkPaid(id){
+  const inv = state.invoices.find(i=>i.id===id);
+  if(!inv) return;
+  inv.paymentStatus='paid';
+  inv.paidDate = document.getElementById('m_date').value || todayISO();
+  inv.paymentRef = document.getElementById('m_ref').value.trim();
+  inv.accountId = document.getElementById('m_account').value || null;
+  inv.paidBy = getUserName() || null;
+  closeModal();
+  render();
+  toast('Marked as paid.');
+  saveInvoices().then(()=>{ if(!state.storageOK) render(); });
+}
+function scheduleInvoice(id){
+  const inv = state.invoices.find(i=>i.id===id);
+  if(!inv) return;
+  inv.paymentStatus='scheduled';
+  render();
+  saveInvoices().then(()=>{ if(!state.storageOK) render(); });
+}
+
+/* ================= APPROVALS ================= */
+function renderApprovals(){
+  const today = todayISO();
+  const sentToday = state.invoices.filter(i=>i.sentForApprovalDate===today);
+  const awaiting = state.invoices.filter(i=>i.approvalStatus==='sent_for_approval').sort((a,b)=> a.sentForApprovalDate.localeCompare(b.sentForApprovalDate));
+  const notSent = state.invoices.filter(i=>i.approvalStatus==='not_sent' && i.paymentStatus!=='paid');
+  const approvedRecent = state.invoices.filter(i=>i.approvalStatus==='approved').sort((a,b)=> (b.approvedDate||'').localeCompare(a.approvedDate||'')).slice(0,8);
+
+  return `
+  <div class="pagehead"><h1>Approvals</h1><div class="today">Sent-for-approval log &amp; status</div></div>
+
+  <div class="section" style="margin-top:0;">
+    <div class="section-head"><h2>Sent for approval today (${sentToday.length})</h2></div>
+    ${approvalTable(sentToday, true)}
+  </div>
+
+  <div class="section">
+    <div class="section-head"><h2>Awaiting approval (${awaiting.length})</h2></div>
+    ${approvalTable(awaiting, true)}
+  </div>
+
+  <div class="section">
+    <div class="section-head"><h2>Not yet sent (${notSent.length})</h2></div>
+    ${approvalTable(notSent, false)}
+  </div>
+
+  <div class="section">
+    <div class="section-head"><h2>Recently approved</h2></div>
+    ${approvalTable(approvedRecent, false)}
+  </div>
+  `;
+}
+function approvalTable(rows, showSentDate){
+  if(!rows.length) return `<div class="empty">Nothing here.</div>`;
+  return `<div class="tablewrap"><table>
+    <thead><tr><th>Vendor</th><th>Category</th><th class="amt">Net Payable</th><th>Due</th>${showSentDate?'<th>Sent</th>':''}<th>Status</th><th></th></tr></thead>
+    <tbody>
+    ${rows.map(i=>`
+      <tr>
+        <td><div class="vendorname">${i.vendorName}</div>${subtitleFor(i)?`<div class="vendorcat">${subtitleFor(i)}</div>`:''}</td>
+        <td class="muted">${i.category}</td>
+        <td class="amt">${fmtMoney(i.netPayable)}</td>
+        <td class="mono">${fmtDate(i.dueDate)}</td>
+        ${showSentDate? `<td class="mono">${fmtDate(i.sentForApprovalDate)}</td>`:''}
+        <td>${approvalStamp(i)}${(i.approvedBy||i.sentForApprovalBy)?`<div style="font-size:10.5px;color:var(--ink-soft);margin-top:3px;">by ${i.approvalStatus==='approved'? (i.approvedBy||'—') : (i.sentForApprovalBy||'—')}</div>`:''}</td>
+        <td>${rowActions(i)}</td>
+      </tr>`).join('')}
+    </tbody></table></div>`;
+}
+
+/* ================= CASH CALENDAR ================= */
+function renderCalendar(){
+  const banks = bankAccounts();
+  if(!banks.length){
+    return `
+    <div class="pagehead"><h1>Cash Calendar</h1></div>
+    <div class="section" style="margin-top:0;"><div class="empty">Add a bank account on the Accounts tab first — the calendar tracks day-by-day balance per account (useful since your capital/investor account and operating account need to be watched separately).</div>
+    <button class="btn primary small" style="margin-top:10px;" onclick="setTab('accounts')">Go to Accounts</button></div>`;
+  }
+  const accId = state.selectedCalAccount && accountById(state.selectedCalAccount) ? state.selectedCalAccount : banks[0].id;
+  state.selectedCalAccount = accId;
+  const sel = state.selectedCalDate || todayISO();
+  const dueList = state.invoices.filter(i=>i.dueDate===sel && i.paymentStatus!=='paid' && (i.accountId===accId || !i.accountId)).sort((a,b)=> b.netPayable - a.netPayable);
+  const log = state.cashlog[accId] || {};
+  const opening = log[sel];
+  const totalDue = dueList.reduce((s,i)=>s+i.netPayable,0);
+  const closing = (opening!==undefined && opening!==null) ? opening - totalDue : null;
+  const blocking = dueList.filter(i=>{ const v=vendorById(i.vendorId); return v && (v.cycleType==='advance100'||v.cycleType==='advance50'); });
+
+  return `
+  <div class="pagehead"><h1>Cash Calendar</h1></div>
+  <div class="section" style="margin-top:0;">
+    <div class="row3">
+      <div class="field"><label>Account</label>
+        <select onchange="state.selectedCalAccount=this.value; render();">
+          ${banks.map(a=>`<option value="${a.id}" ${accId===a.id?'selected':''}>${a.name}</option>`).join('')}
+        </select>
+      </div>
+      <div class="field"><label>Date</label><input type="date" value="${sel}" onchange="state.selectedCalDate=this.value; render();"></div>
+      <div class="field"><label>Opening balance for this date (₹)</label>
+        <input type="number" id="cal_opening" value="${opening!==undefined? opening : ''}" placeholder="Enter opening balance">
+      </div>
+    </div>
+    <button class="btn primary small" onclick="saveOpeningBalance('${accId}','${sel}')">Save opening balance</button>
+    <span class="hint">Payments with no account assigned show up on every account's calendar until you allocate them.</span>
+  </div>
+
+  <div class="grid cards4" style="margin-top:16px;">
+    <div class="card"><div class="label">Opening balance</div><div class="value">${opening!==undefined && opening!==null? fmtMoney(opening):'—'}</div></div>
+    <div class="card ${totalDue>0?'warn':''}"><div class="label">Due on ${fmtDate(sel)}</div><div class="value">${fmtMoney(totalDue)}</div><div class="sub">${dueList.length} payment${dueList.length===1?'':'s'}</div></div>
+    <div class="card ${closing!==null && closing<0? 'bad':(closing!==null?'good':'')}"><div class="label">Projected closing</div><div class="value">${closing!==null? fmtMoney(closing) : '—'}</div>${closing!==null && closing<0? '<div class="sub">Shortfall — schedule with care</div>':''}</div>
+    <div class="card ${blocking.length?'warn':''}"><div class="label">Advance / blocking</div><div class="value mono">${blocking.length}</div><div class="sub">Gate dispatch or production</div></div>
+  </div>
+
+  <div class="section">
+    <div class="section-head"><h2>Payments due — ${fmtDate(sel)}</h2></div>
+    ${dueList.length? `<div class="tablewrap"><table>
+      <thead><tr><th>Vendor</th><th>Category</th><th class="amt">Net Payable</th><th>Cycle</th><th>Approval</th><th>Payment</th><th></th></tr></thead>
+      <tbody>${dueList.map(i=>{ const v=vendorById(i.vendorId); return `
+        <tr>
+          <td><div class="vendorname">${i.vendorName}${!i.accountId?' <span class="stamp grey" style="margin-left:4px;">Unassigned</span>':''}</div>${i.invoiceNumber?`<div class="vendorcat">Inv #${i.invoiceNumber}</div>`:''}</td>
+          <td class="muted">${i.category}</td>
+          <td class="amt">${fmtMoney(i.netPayable)}</td>
+          <td class="cyclebadge">${v? cycleLabel(v):'Ad-hoc'}</td>
+          <td>${approvalStamp(i)}</td>
+          <td>${statusStamp(i)}</td>
+          <td>${rowActions(i)}</td>
+        </tr>`; }).join('')}</tbody>
+    </table></div>` : `<div class="empty">Nothing due on this date.</div>`}
+  </div>
+  `;
+}
+function saveOpeningBalance(accountId, date){
+  const val = Number(document.getElementById('cal_opening').value);
+  if(isNaN(val)){ toast('Enter a valid amount.'); return; }
+  if(!state.cashlog[accountId]) state.cashlog[accountId] = {};
+  state.cashlog[accountId][date] = val;
+  render();
+  toast('Opening balance saved.');
+  saveCashlog().then(()=>{ if(!state.storageOK) render(); });
+}
+
+/* ================= ACCOUNTS ================= */
+function renderAccounts(){
+  const banks = bankAccounts();
+  const cards = creditCards();
+  return `
+  <div class="pagehead"><h1>Accounts</h1><button class="btn primary" onclick="openAddAccount()">+ Add account or card</button></div>
+
+  <div class="section" style="margin-top:0;">
+    <div class="section-head"><h2>Bank accounts</h2></div>
+    ${banks.length? banks.map(a=>{
+      const bal = latestOpeningBalance(a.id);
+      return `<div style="border:1px solid var(--line);border-radius:9px;padding:14px 16px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+        <div>
+          <div class="vendorname">${a.name}</div>
+          ${a.purpose? `<div class="vendorcat">${a.purpose}</div>`:''}
+        </div>
+        <div style="text-align:right;">
+          <div class="mono" style="font-size:17px;font-weight:600;">${bal? fmtMoney(bal.amount) : '—'}</div>
+          <div class="sub" style="font-size:11px;color:var(--ink-soft);">${bal? 'as of '+fmtDate(bal.date) : 'no balance logged yet'}</div>
+        </div>
+        <div style="display:flex;gap:6px;">
+          <button class="btn small" onclick="state.selectedCalAccount='${a.id}'; setTab('calendar')">Open calendar</button>
+          <button class="btn small danger" onclick="deleteAccount('${a.id}')">Remove</button>
+        </div>
+      </div>`;
+    }).join('') : `<div class="empty">No bank accounts yet. Add your capital/investor account and any operating accounts here.</div>`}
+  </div>
+
+  <div class="section">
+    <div class="section-head"><h2>Credit cards</h2></div>
+    ${cards.length? cards.map(a=>{
+      const outstanding = cardOutstanding(a.id);
+      const limit = a.creditLimit||0;
+      const pct = limit>0? Math.min(100, Math.round(outstanding/limit*100)) : 0;
+      const due = nextDueDate(a);
+      return `<div style="border:1px solid var(--line);border-radius:9px;padding:14px 16px;margin-bottom:10px;">
+        <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+          <div>
+            <div class="vendorname">${a.name}</div>
+            ${a.purpose? `<div class="vendorcat">${a.purpose}</div>`:''}
+          </div>
+          <div style="text-align:right;">
+            <div class="mono" style="font-size:17px;font-weight:600;">${fmtMoney(outstanding)} <span class="muted" style="font-size:12px;font-weight:400;">/ ${limit? fmtMoney(limit):'no limit set'}</span></div>
+            ${due? `<div class="sub" style="font-size:11px;color:var(--ink-soft);">next due ${fmtDate(due)}</div>`:''}
+          </div>
+        </div>
+        ${limit>0? `<div style="height:6px;border-radius:4px;background:var(--grey-soft);margin-top:10px;overflow:hidden;"><div style="height:100%;width:${pct}%;background:${pct>85?'var(--red)':pct>60?'var(--amber)':'var(--accent)'};"></div></div>` : ''}
+        <div style="display:flex;gap:6px;margin-top:10px;">
+          <button class="btn small" onclick="openLogRepayment('${a.id}')">Log a card repayment</button>
+          <button class="btn small danger" onclick="deleteAccount('${a.id}')">Remove</button>
+        </div>
+      </div>`;
+    }).join('') : `<div class="empty">No credit cards yet. Add one to track outstanding balance vs. limit and due dates.</div>`}
+  </div>
+  `;
+}
+
+function openAddAccount(){
+  openModal(`
+    <h3>Add account or card</h3>
+    <div class="field"><label>Name</label><input type="text" id="a_name" placeholder="e.g. Capital Account — Investor Funds"></div>
+    <div class="field"><label>Type</label>
+      <select id="a_type" onchange="onAccountTypeChange()">
+        <option value="bank">Bank account</option>
+        <option value="creditcard">Credit card</option>
+      </select>
+    </div>
+    <div class="field"><label>Purpose / note (optional)</label><input type="text" id="a_purpose" placeholder="e.g. Investor capital — do not use for routine opex"></div>
+    <div id="a_cardFields" style="display:none;">
+      <div class="row2">
+        <div class="field"><label>Credit limit (₹)</label><input type="number" id="a_limit" min="0"></div>
+        <div class="field"><label>Bill due day of month</label><input type="number" id="a_dueday" min="1" max="31"></div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn primary" onclick="addAccount()">Add</button>
+    </div>
+  `);
+  onAccountTypeChange();
+}
+function onAccountTypeChange(){
+  document.getElementById('a_cardFields').style.display = document.getElementById('a_type').value==='creditcard' ? 'block':'none';
+}
+function addAccount(){
+  const name = document.getElementById('a_name').value.trim();
+  if(!name){ toast('Enter a name.'); return; }
+  const type = document.getElementById('a_type').value;
+  const acc = { id: uid('acc_'), name, type, purpose: document.getElementById('a_purpose').value.trim(), createdAt: Date.now() };
+  if(type==='creditcard'){
+    acc.creditLimit = Number(document.getElementById('a_limit').value)||0;
+    acc.dueDay = Number(document.getElementById('a_dueday').value)||1;
+  }
+  state.accounts.push(acc);
+  closeModal();
+  render();
+  toast('Account added.');
+  saveAccounts().then(()=>{ if(!state.storageOK) render(); });
+}
+function deleteAccount(id){
+  const used = state.invoices.some(i=>i.accountId===id);
+  if(used){ toast("Can't remove — payments are linked to this account."); return; }
+  state.accounts = state.accounts.filter(a=>a.id!==id);
+  delete state.cashlog[id];
+  render();
+  saveAccounts().then(()=>{ if(!state.storageOK) render(); });
+  saveCashlog();
+}
+function openLogRepayment(accountId){
+  const a = accountById(accountId);
+  openModal(`
+    <h3>Log a card repayment</h3>
+    <div class="modal-sub">${a.name} · current outstanding ${fmtMoney(cardOutstanding(accountId))}</div>
+    <div class="field"><label>Amount paid (₹)</label><input type="number" id="r_amount" min="0"></div>
+    <div class="field"><label>Date</label><input type="date" id="r_date" value="${todayISO()}"></div>
+    <div class="field"><label>Note (optional)</label><input type="text" id="r_note" placeholder="e.g. Auto-debit, NEFT"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn primary" onclick="confirmRepayment('${accountId}')">Save</button>
+    </div>
+  `);
+}
+function confirmRepayment(accountId){
+  const amount = Number(document.getElementById('r_amount').value);
+  if(!amount || amount<=0){ toast('Enter a valid amount.'); return; }
+  state.repayments.push({ id: uid('rep_'), accountId, amount, date: document.getElementById('r_date').value||todayISO(), note: document.getElementById('r_note').value.trim(), loggedBy: getUserName()||null });
+  closeModal();
+  render();
+  toast('Repayment logged.');
+  saveRepayments().then(()=>{ if(!state.storageOK) render(); });
+}
+
+/* ================= VENDORS ================= */
+function renderVendors(){
+  return `
+  <div class="pagehead"><h1>Vendors</h1><button class="btn primary" onclick="openAddVendor()">+ Add vendor</button></div>
+  <div class="section" style="margin-top:0;">
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th>Vendor</th><th>Category</th><th>Payment cycle</th><th></th></tr></thead>
+    <tbody>
+      ${state.vendors.map(v=>`
+        <tr>
+          <td class="vendorname">${v.name}</td>
+          <td class="muted">${v.category}</td>
+          <td><span class="stamp accent">${cycleLabel(v)}</span></td>
+          <td><button class="btn small danger" onclick="deleteVendor('${v.id}')">Remove</button></td>
+        </tr>`).join('')}
+    </tbody>
+  </table>
+  </div>
+  </div>
+  `;
+}
+function openAddVendor(){
+  openModal(`
+    <h3>Add vendor</h3>
+    <div class="field"><label>Name</label><input type="text" id="v_name" placeholder="Vendor name"></div>
+    <div class="field"><label>Category</label><input type="text" id="v_category" placeholder="e.g. Raw Material"></div>
+    <div class="field"><label>Payment cycle</label>
+      <select id="v_cycle" onchange="onVendorCycleChange()">
+        <option value="advance100">100% Advance</option>
+        <option value="advance50">50% Advance</option>
+        <option value="days">Days after invoice</option>
+        <option value="fixedDate">Fixed day of month</option>
+      </select>
+    </div>
+    <div id="v_daysWrap" style="display:none;" class="field"><label>Number of days</label><input type="number" id="v_days" min="1"></div>
+    <div id="v_fixedWrap" style="display:none;">
+      <div class="field"><label>Day of month</label><input type="number" id="v_fixedday" min="1" max="31"></div>
+      <div class="field"><label style="display:flex;align-items:center;gap:8px;"><input type="checkbox" id="v_nextmonth" style="width:auto;"> Always the following month (like GST)</label></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn primary" onclick="addVendor()">Add vendor</button>
+    </div>
+  `);
+  onVendorCycleChange();
+}
+function onVendorCycleChange(){
+  const t = document.getElementById('v_cycle').value;
+  document.getElementById('v_daysWrap').style.display = t==='days'? 'block':'none';
+  document.getElementById('v_fixedWrap').style.display = t==='fixedDate'? 'block':'none';
+}
+function addVendor(){
+  const name = document.getElementById('v_name').value.trim();
+  if(!name){ toast('Enter a vendor name.'); return; }
+  const category = document.getElementById('v_category').value.trim() || 'Uncategorised';
+  const cycleType = document.getElementById('v_cycle').value;
+  const v = { id: uid('v_'), name, category, cycleType };
+  if(cycleType==='days') v.cycleDays = Number(document.getElementById('v_days').value)||30;
+  if(cycleType==='fixedDate'){ v.fixedDay = Number(document.getElementById('v_fixedday').value)||1; v.nextMonth = document.getElementById('v_nextmonth').checked; }
+  state.vendors.push(v);
+  closeModal();
+  render();
+  toast('Vendor added.');
+  saveVendors().then(()=>{ if(!state.storageOK) render(); });
+}
+function deleteVendor(id){
+  const used = state.invoices.some(i=>i.vendorId===id);
+  if(used){ toast("Can't remove — this vendor has invoices logged against it."); return; }
+  state.vendors = state.vendors.filter(v=>v.id!==id);
+  render();
+  saveVendors().then(()=>{ if(!state.storageOK) render(); });
+}
+
+/* ================= HISTORY ================= */
+function renderHistory(){
+  const paid = state.invoices.filter(i=>i.paymentStatus==='paid').sort((a,b)=> (b.paidDate||'').localeCompare(a.paidDate||''));
+  const totalPaid = paid.reduce((s,i)=>s+i.netPayable,0);
+  const totalTds = paid.reduce((s,i)=>s+(i.tdsApplicable? i.tdsAmount:0),0);
+  return `
+  <div class="pagehead"><h1>Paid History</h1></div>
+  <div class="grid cards4">
+    <div class="card"><div class="label">Total paid</div><div class="value">${fmtMoney(totalPaid)}</div><div class="sub">${paid.length} payments</div></div>
+    <div class="card"><div class="label">Total TDS deducted</div><div class="value">${fmtMoney(totalTds)}</div></div>
+  </div>
+  <div class="section">
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th>Vendor</th><th>Category</th><th class="amt">Net Paid</th><th class="amt">TDS</th><th>Paid on</th><th>Paid by</th><th>Reference</th></tr></thead>
+    <tbody>
+      ${paid.length? paid.map(i=>`
+        <tr>
+          <td><div class="vendorname">${i.vendorName}</div>${subtitleFor(i)?`<div class="vendorcat">${subtitleFor(i)}</div>`:''}</td>
+          <td class="muted">${i.category}</td>
+          <td class="amt">${fmtMoney(i.netPayable)}</td>
+          <td class="amt">${i.tdsApplicable? fmtMoney(i.tdsAmount):'—'}</td>
+          <td class="mono">${fmtDate(i.paidDate)}</td>
+          <td class="muted">${i.paidBy||'—'}</td>
+          <td class="muted">${i.paymentRef||'—'}</td>
+        </tr>`).join('') : `<tr><td colspan="7" class="empty">No payments marked paid yet.</td></tr>`}
+    </tbody>
+  </table>
+  </div>
+  </div>
+  `;
+}
+
+init();
+</script>
+</body>
+</html>
